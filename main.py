@@ -6,6 +6,8 @@ from sqlalchemy import text
 from database import get_db
 from models import Task,User
 from security import hash_password, verify_password, create_access_token,get_current_user
+import os
+from fastapi.responses import JSONResponse
 
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -18,6 +20,23 @@ app = FastAPI(title="LifeOS API")
 
 configure_logging()
 logger = logging.getLogger("lifeos")
+
+#global exception handler
+@app.exception_handler(Exception)
+async def unexpected_error_handler(
+    request: Request, exc: Exception
+):
+    logger.exception(
+        "Unhandled error on %s %s",
+        request.method,
+        request.url.path,
+    )
+    return JSONResponse(
+        status_code=500,
+        content={"detail": "Internal server error"},
+    )
+
+
 
 # configure rate limiting
 limiter = Limiter(key_func=get_remote_address)
@@ -178,7 +197,7 @@ def register_user(request:Request,data: UserCreate, db: Session = Depends(get_db
 #login end_point
 @app.post("/auth/login")
 @limiter.limit("5/minute")
-def login(request:Request,data: UserLogin, db: Session = Depends(get_db)):
+async def login(request:Request,data: UserLogin, db: Session = Depends(get_db)):
     user = db.query(User).filter(
         User.email == str(data.email)
     ).first()
